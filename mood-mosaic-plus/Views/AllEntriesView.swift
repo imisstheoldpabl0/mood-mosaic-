@@ -89,6 +89,9 @@ struct AllEntriesView: View {
                                     ForEach(dateGroup.entries, id: \.id) { entry in
                                         entryCard(entry)
                                     }
+                                    .onDelete { indexSet in
+                                        deleteEntries(from: dateGroup.entries, at: indexSet)
+                                    }
                                 }
                             }
                         }
@@ -206,6 +209,17 @@ struct AllEntriesView: View {
     }
 
     // MARK: - Helper Functions
+    private func deleteEntries(from entries: [SimpleMoodEntry], at indexSet: IndexSet) {
+        for index in indexSet {
+            let entryToDelete = entries[index]
+            dataStore.deleteMoodEntry(entryToDelete)
+        }
+
+        // Add haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+    }
+
     private func moodColor(for intensity: Double) -> Color {
         switch intensity {
         case 0..<30:

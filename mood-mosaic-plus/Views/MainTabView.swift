@@ -25,9 +25,9 @@ struct MainTabView: View {
                     Label("Habits", systemImage: "list.bullet.clipboard")
                 }
 
-            SettingsView()
+            ProfileView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
+                    Label("Profile", systemImage: "person.circle.fill")
                 }
         }
     }

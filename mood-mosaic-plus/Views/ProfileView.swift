@@ -1,13 +1,13 @@
 //
-//  SettingsView.swift
+//  ProfileView.swift
 //  mood-mosaic-plus
 //
-//  Created by Pablo on 24/9/25.
+//  Created by Pablo on 25/9/25.
 //
 
 import SwiftUI
 
-struct SettingsView: View {
+struct ProfileView: View {
     @StateObject private var healthKitService = HealthKitService()
     @State private var notificationsEnabled = true
     @State private var quietHoursStart = Date()
@@ -17,57 +17,137 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                // Health & Privacy Section
-                Section {
-                    healthKitRow
-                    notificationSettingsRow
-                } header: {
-                    Text("Health & Privacy")
-                }
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Profile Header
+                    profileHeader
 
-                // Preferences Section
-                Section {
-                    quietHoursRow
-                    hapticFeedbackRow
-                } header: {
-                    Text("Preferences")
-                }
+                    // Settings Sections
+                    VStack(spacing: 20) {
+                        // Health & Privacy Section
+                        settingsSection(title: "Health & Privacy") {
+                            healthKitRow
+                            Divider()
+                            notificationSettingsRow
+                        }
 
-                // Data Section
-                Section {
-                    dataExportRow
-                    dataDeleteRow
-                } header: {
-                    Text("Your Data")
-                }
+                        // Preferences Section
+                        settingsSection(title: "Preferences") {
+                            quietHoursRow
+                            Divider()
+                            hapticFeedbackRow
+                        }
 
-                // Support Section
-                Section {
-                    supportRow
-                    aboutRow
-                } header: {
-                    Text("Support")
-                }
+                        // Data Section
+                        settingsSection(title: "Your Data") {
+                            dataExportRow
+                            Divider()
+                            dataDeleteRow
+                        }
 
-                // App Info
-                Section {
-                    versionRow
-                } footer: {
-                    Text("Mood Mosaic+ uses on-device processing to keep your data private and secure.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        // Support Section
+                        settingsSection(title: "Support") {
+                            supportRow
+                            Divider()
+                            aboutRow
+                        }
+
+                        // App Info
+                        settingsSection(title: nil) {
+                            versionRow
+                        }
+                    }
                 }
+                .padding()
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
+            .background(.regularMaterial)
         }
         .sheet(isPresented: $showingDataExport) {
             DataExportView()
         }
     }
 
-    // MARK: - Health Kit Row
+    // MARK: - Profile Header
+    private var profileHeader: some View {
+        VStack(spacing: 16) {
+            // Avatar
+            Circle()
+                .fill(.blue.gradient)
+                .frame(width: 80, height: 80)
+                .overlay {
+                    Text("You")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                }
+
+            VStack(spacing: 4) {
+                Text("Welcome to Mood Mosaic+")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+
+                Text("Keep tracking your wellbeing")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Quick Stats
+            HStack(spacing: 20) {
+                statItem(title: "Streak", value: "7 days")
+
+                Divider()
+                    .frame(height: 30)
+
+                statItem(title: "Entries", value: "42")
+
+                Divider()
+                    .frame(height: 30)
+
+                statItem(title: "Score", value: "85%")
+            }
+            .padding()
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func statItem(title: String, value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(.blue)
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func settingsSection<Content: View>(title: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let title = title {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 4)
+            }
+
+            VStack(spacing: 8) {
+                content()
+            }
+            .padding()
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.regularMaterial, lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Settings Rows (moved from SettingsView)
+
     private var healthKitRow: some View {
         HStack {
             Image(systemName: "heart.fill")
@@ -105,7 +185,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Notification Settings Row
     private var notificationSettingsRow: some View {
         NavigationLink {
             NotificationSettingsView(
@@ -127,11 +206,17 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Quiet Hours Row
     private var quietHoursRow: some View {
         HStack {
             Image(systemName: "moon.fill")
@@ -155,7 +240,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Haptic Feedback Row
     private var hapticFeedbackRow: some View {
         Toggle(isOn: $hapticFeedbackEnabled) {
             HStack {
@@ -169,7 +253,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Data Export Row
     private var dataExportRow: some View {
         Button {
             showingDataExport = true
@@ -192,7 +275,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Data Delete Row
     private var dataDeleteRow: some View {
         Button {
             // Handle data deletion
@@ -211,7 +293,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Support Row
     private var supportRow: some View {
         NavigationLink {
             SupportView()
@@ -223,11 +304,17 @@ struct SettingsView: View {
 
                 Text("Help & Support")
                     .font(.body)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - About Row
     private var aboutRow: some View {
         NavigationLink {
             AboutView()
@@ -239,11 +326,17 @@ struct SettingsView: View {
 
                 Text("About")
                     .font(.body)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Version Row
     private var versionRow: some View {
         HStack {
             Image(systemName: "app.badge")
@@ -262,7 +355,7 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Supporting Views
+// MARK: - Supporting Views (copied from SettingsView)
 
 struct NotificationSettingsView: View {
     @Binding var notificationsEnabled: Bool
@@ -416,5 +509,5 @@ struct AboutView: View {
 }
 
 #Preview {
-    SettingsView()
+    ProfileView()
 }

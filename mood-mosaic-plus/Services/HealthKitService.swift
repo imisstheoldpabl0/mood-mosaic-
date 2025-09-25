@@ -35,12 +35,28 @@ class HealthKitService: ObservableObject {
             throw HealthKitError.notAvailable
         }
 
-        // Simplified for MVP - just basic step count for now
-        guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
-            throw HealthKitError.dataNotAvailable
+        // Define the health data types we want to read
+        var typesToRead: Set<HKObjectType> = []
+
+        if let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) {
+            typesToRead.insert(stepsType)
         }
 
-        let typesToRead: Set<HKObjectType> = [stepsType]
+        if let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
+            typesToRead.insert(sleepType)
+        }
+
+        if let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            typesToRead.insert(heartRateType)
+        }
+
+        if let activeEnergyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
+            typesToRead.insert(activeEnergyType)
+        }
+
+        guard !typesToRead.isEmpty else {
+            throw HealthKitError.dataNotAvailable
+        }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             healthStore.requestAuthorization(toShare: nil, read: typesToRead) { [weak self] success, error in
@@ -48,7 +64,6 @@ class HealthKitService: ObservableObject {
                     if let error = error {
                         continuation.resume(throwing: HealthKitError.fetchFailed(error))
                     } else {
-                        self?.isAuthorized = success
                         self?.checkAuthorizationStatus()
                         continuation.resume(returning: ())
                     }
@@ -58,17 +73,110 @@ class HealthKitService: ObservableObject {
     }
 
     private func checkAuthorizationStatus() {
-        guard isHealthDataAvailable,
-              let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+        guard isHealthDataAvailable else {
+            authorizationStatus = .notDetermined
+            isAuthorized = false
             return
         }
 
-        let status = healthStore.authorizationStatus(for: stepsType)
-        authorizationStatus = status
-        isAuthorized = status == .sharingAuthorized
+        // Check authorization for multiple types
+        var hasAnyAuthorization = false
+
+        let typesToCheck: [HKObjectType] = [
+            HKQuantityType.quantityType(forIdentifier: .stepCount),
+            HKCategoryType.categoryType(forIdentifier: .sleepAnalysis),
+            HKQuantityType.quantityType(forIdentifier: .heartRate),
+            HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)
+        ].compactMap { $0 }
+
+        for type in typesToCheck {
+            let status = healthStore.authorizationStatus(for: type)
+            if status == .sharingAuthorized {
+                hasAnyAuthorization = true
+                authorizationStatus = .sharingAuthorized
+                break
+            } else if status == .sharingDenied {
+                authorizationStatus = .sharingDenied
+            }
+        }
+
+        isAuthorized = hasAnyAuthorization
+
+        // If no specific status was found, keep as notDetermined
+        if !hasAnyAuthorization && authorizationStatus != .sharingDenied {
+            authorizationStatus = .notDetermined
+        }
     }
 
-    // Simplified methods for MVP
+    // Health data fetching methods
+    func fetchSleepHours(for date: Date) async throws -> Double {
+        guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
+            throw HealthKitError.dataNotAvailable
+        }
+
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: endOfDay, options: .strictStartDate)
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Double, Error>) in
+            let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: HealthKitError.fetchFailed(error))
+                    return
+                }
+
+                guard let sleepSamples = samples as? [HKCategorySample] else {
+                    continuation.resume(returning: 0.0)
+                    return
+                }
+
+                // Calculate total sleep time (in bed + asleep)
+                let totalSleepTime = sleepSamples
+                    .filter { $0.value == HKCategoryValueSleepAnalysis.inBed.rawValue || $0.value == HKCategoryValueSleepAnalysis.asleep.rawValue }
+                    .reduce(0.0) { total, sample in
+                        total + sample.endDate.timeIntervalSince(sample.startDate)
+                    }
+
+                let hoursSlept = totalSleepTime / 3600.0 // Convert seconds to hours
+                continuation.resume(returning: hoursSlept)
+            }
+
+            self.healthStore.execute(query)
+        }
+    }
+
+    func fetchWorkoutMinutes(for date: Date) async throws -> Int {
+        guard let workoutType = HKWorkoutType.workoutType() else {
+            throw HealthKitError.dataNotAvailable
+        }
+
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: endOfDay, options: .strictStartDate)
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Int, Error>) in
+            let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: HealthKitError.fetchFailed(error))
+                    return
+                }
+
+                guard let workouts = samples as? [HKWorkout] else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+
+                let totalMinutes = workouts.reduce(0) { total, workout in
+                    total + Int(workout.duration / 60.0) // Convert seconds to minutes
+                }
+
+                continuation.resume(returning: totalMinutes)
+            }
+
+            self.healthStore.execute(query)
+        }
+    }
+
     func fetchSteps(for date: Date) async throws -> Int {
         guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
             throw HealthKitError.dataNotAvailable

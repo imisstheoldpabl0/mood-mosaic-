@@ -10,6 +10,7 @@ import SwiftUI
 struct MoodLogView: View {
     @StateObject private var viewModel = MoodLogViewModel()
     @ObservedObject private var dataStore = MoodDataStore.shared
+    @State private var showingProfile = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,20 @@ struct MoodLogView: View {
             .navigationTitle("Log Your Mood")
             .navigationBarTitleDisplayMode(.large)
             .background(.regularMaterial)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingProfile = true
+                    } label: {
+                        Image(systemName: "person.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingProfile) {
+            ProfileView()
         }
     }
 
@@ -108,7 +123,7 @@ struct MoodLogView: View {
     // MARK: - Quick Situational Section
     private var quickSituationalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Quick Log")
+            Text("Context")
                 .font(.headline)
                 .foregroundStyle(.primary)
 
